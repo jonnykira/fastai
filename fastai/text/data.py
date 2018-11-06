@@ -4,7 +4,7 @@ from .transform import *
 from ..basic_data import *
 
 __all__ = ['BaseTextDataset', 'LanguageModelLoader', 'SortSampler', 'SortishSampler', 'TextDataset', 'TextMtd',
-           'pad_collate', 'read_classes', 'TextDataBunch', 'TextLMDataBunch', 'TextClasDataBunch']
+           'pad_collate', 'read_classes', 'TextDataBunch', 'TextLMDataBunch', 'TextClasDataBunch', 'TextLMEncoderDataBunch']
 
 TextMtd = IntEnum('TextMtd', 'DF TOK IDS')
 
@@ -363,6 +363,18 @@ class TextLMDataBunch(TextDataBunch):
         "Create a `TextDataBunch` in `path` from the `datasets` for language modelling."
         dataloaders = [LanguageModelLoader(ds, **kwargs) for ds in datasets]
         return cls(*dataloaders, path=path)
+
+class TextLMEncoderDataBunch(TextDataBunch):
+    "Create a `TextDataBunch` for encoding the sequences. This is almost the same as TextClasDataBunch but without SortishSampler() on the training set"
+    @classmethod
+    def create(cls, datasets:Collection[TextDataset], path:PathOrStr, bs=None, pad_idx=1, pad_first=True, **kwargs) -> DataBunch:
+        "Create a `TextDataBunch` in `path` from the `datasets` for language modelling."
+        collate_fn = partial(pad_collate, pad_idx=pad_idx, pad_first=pad_first)
+        dataloaders = []
+        for ds in datasets:
+            sampler = SortSampler(ds.ids, key=lambda x: len(ds.ids[x]))
+            dataloaders.append(DataLoader(ds, batch_size=bs,  sampler=sampler, **kwargs))
+        return cls(*dataloaders, path=path, collate_fn=collate_fn)
 
 class TextClasDataBunch(TextDataBunch):
     "Create a `TextDataBunch` suitable for training an RNN classifier."
