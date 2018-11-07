@@ -165,7 +165,7 @@ class Learner():
         """extract features from the language model""" #TODO
 
         self.model.eval() # turnn off the training regularization
-        encoder = self.model#[0]
+        encoder = self.model[0]
         #list to accumulate features
         lm_features = []
         # fold indices
@@ -173,21 +173,22 @@ class Learner():
         end2 = 20
         index = 0
         #
-        # batchx, batchy = next(iter(self.data.valid_dl))
-        # return encoder(batchx)
-        for xb, yb in self.data.valid_dl:
-            print("dir", dir(self.model))
-            print("valid batch shape", xb.shape)
-            out = encoder(xb)
-            last_state = out[0][2]
-            lm_features.append(last_state.detach().numpy())
-            index += 1
-            if index == end1:
-              np.save("test1", lm_features)
-              lm_features = []
-            if index == end2:
-              np.save("test2", lm_features)
-              lm_features = []
+        batchx, batchy = next(iter(self.data.valid_dl))
+        return encoder(batchx)
+        # for xb, yb in self.data.valid_dl:
+        #     # print("dir", dir(self.model))
+        #     # print("valid batch shape", xb.shape)
+        #     out = encoder(xb)
+        #     # print("out")
+        #     last_state = out[0][2]
+        #     lm_features.append(last_state.detach().numpy())
+        #     index += 1
+        #     if index == end1:
+        #       np.save("test1", lm_features)
+        #       lm_features = []
+        #     if index == end2:
+        #       np.save("test2", lm_features)
+        #       lm_features = []
 
         # lm_features = []
         # for xb, yb in self.data.train_dl:

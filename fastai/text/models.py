@@ -2,7 +2,7 @@ from ..torch_core import *
 from ..layers import *
 
 __all__ = ['EmbeddingDropout', 'LinearDecoder', 'MultiBatchRNNCore', 'PoolingLinearClassifier', 'RNNCore', 'RNNDropout',
-           'SequentialRNN', 'WeightDropout', 'dropout_mask', 'get_language_model', 'get_rnn_classifier']
+           'SequentialRNN', 'WeightDropout', 'dropout_mask', 'get_language_model', 'get_rnn_classifier', 'get_rnn_encoder']
 
 def dropout_mask(x:Tensor, sz:Collection[int], p:float):
     "Return a dropout mask of the same type as x, size sz, with probability p to cancel an element."
@@ -106,7 +106,7 @@ class RNNCore(nn.Module):
         sl,bs = input.size()
         if bs!=self.bs:
             self.bs=bs
-            self.reset() #TODO check if this should be here?
+            self.reset()
         raw_output = self.input_dp(self.encoder_dp(input))
         new_hidden,raw_outputs,outputs = [],[],[]
         for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
@@ -169,23 +169,19 @@ class RNNEncoderCore(nn.Module):
         sl,bs = input.size()
         if bs!=self.bs:
             self.bs=bs
-            self.reset() #TODO check if this should be here?
+            self.reset() #TODO check what the reset does here
         raw_output = self.input_dp(self.encoder_dp(input))
         new_hidden,raw_outputs,outputs = [],[],[]
         for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
-            print("l and type(rnn) and type(hid_dp)", l, type(rnn), type(hid_dp))
+            print("rnn", rnn, l)
             raw_output, new_h = rnn(raw_output, self.hidden[l]) # get hidden
-            print("raw, new", raw_output.shape, new_h[0].shape)
             new_hidden.append(new_h)
             raw_outputs.append(raw_output)
             if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
             outputs.append(raw_output)
         self.hidden = to_detach(new_hidden)
-        print("new_hidden", type(new_hidden[0]))
-        print("new_hidden", len(new_hidden[0]))
-        print("new_hidden", new_hidden[2][1].shape, new_hidden[2][1].shape)
-        print("raw_outputs, outputs", np.allclose(raw_outputs[2],outputs[2]))
-        return raw_outputs, outputs
+        print("new_h[1]", new_h[1].shape)
+        return new_h[1] # only return the final c state of the last layer
 
     def _one_hidden(self, l:int)->Tensor:
         "Return one hidden state."
@@ -267,20 +263,14 @@ class MultiBatchRNNEncoderCore(RNNEncoderCore):
 
     def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]: #HACK
         sl,bs = input.size()
-        print("sl, bs, self.bptt, self.max_seq", sl, bs, self.bptt, self.max_seq)
         self.reset()
         print(input.shape)
         raw_outputs, outputs = [],[]
         for i in range(0, sl, self.bptt):
-            print("i:i+bptt", i, i+self.bptt)
-            print("input", input[i: min(i+self.bptt, sl)].shape)
-            r, o = super().forward(input[i: min(i+self.bptt, sl)])
-            if i>(sl-self.max_seq): # a maximum of max_len time-steps are saved
-                # print("save")
-                # print("r.shape, o.shape", o[0].shape, o[1].shape, o[2].shape)
-                raw_outputs.append(r)
-                outputs.append(o)
-        return self.concat(raw_outputs), self.concat(outputs)
+            c = super().forward(input[i: min(i+self.bptt, sl)])
+
+        print("return", c)
+        return c
 
 
 class PoolingLinearClassifier(nn.Module):
@@ -333,4 +323,4 @@ def get_rnn_encoder(bptt:int, max_seq:int, n_class:int, vocab_sz:int, emb_sz:int
     "Create a RNN classifier model."
     rnn_enc = MultiBatchRNNEncoderCore(bptt, max_seq, vocab_sz, emb_sz, n_hid, n_layers, pad_token=pad_token, bidir=bidir,
                       qrnn=qrnn, hidden_p=hidden_p, input_p=input_p, embed_p=embed_p, weight_p=weight_p)
-    return SequentialRNN(rnn_enc, PoolingLinearClassifier(layers, drops)) # TODO get rid of this
+    return SequentialRNN(rnn_enc, PoolingLinearClassifier(layers, drops))

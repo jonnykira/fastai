@@ -6,7 +6,7 @@ from ..basic_data import *
 from ..datasets import untar_data
 from ..metrics import accuracy
 from ..train import GradientClipping
-from .models import get_language_model, get_rnn_classifier
+from .models import get_language_model, get_rnn_classifier, get_rnn_encoder
 
 __all__ = ['RNNLearner', 'convert_weights', 'lm_split', 'rnn_classifier_split']
 
@@ -120,7 +120,7 @@ class RNNLearner(Learner):
                    else len(lbl))
         layers = [emb_sz*3] + lin_ftrs + [n_class]
         ps = [dps[4]] + ps
-        model = get_rnn_classifier(bptt, max_len, n_class, vocab_size, emb_sz, nh, nl, pad_token,
+        model = get_rnn_encoder(bptt, max_len, n_class, vocab_size, emb_sz, nh, nl, pad_token,
                     layers, ps, input_p=dps[0], weight_p=dps[1], embed_p=dps[2], hidden_p=dps[3], qrnn=qrnn)
         learn = cls(data, model, bptt, split_func=rnn_classifier_split, **kwargs)
         return learn
