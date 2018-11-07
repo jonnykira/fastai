@@ -1,7 +1,7 @@
 from ..torch_core import *
 from ..layers import *
 
-__all__ = ['EmbeddingDropout', 'LinearDecoder', 'MultiBatchRNNCore', 'PoolingLinearClassifier', 'RNNCore', 'RNNDropout', 
+__all__ = ['EmbeddingDropout', 'LinearDecoder', 'MultiBatchRNNCore', 'PoolingLinearClassifier', 'RNNCore', 'RNNDropout',
            'SequentialRNN', 'WeightDropout', 'dropout_mask', 'get_language_model', 'get_rnn_classifier']
 
 def dropout_mask(x:Tensor, sz:Collection[int], p:float):
@@ -106,16 +106,22 @@ class RNNCore(nn.Module):
         sl,bs = input.size()
         if bs!=self.bs:
             self.bs=bs
-            self.reset()
+            self.reset() #TODO check if this should be here?
         raw_output = self.input_dp(self.encoder_dp(input))
         new_hidden,raw_outputs,outputs = [],[],[]
         for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
-            raw_output, new_h = rnn(raw_output, self.hidden[l])
+            print("l and type(rnn) and type(hid_dp)", l, type(rnn), type(hid_dp))
+            raw_output, new_h = rnn(raw_output, self.hidden[l]) # get hidden
+            print("raw, new", raw_output.shape, new_h[0].shape)
             new_hidden.append(new_h)
             raw_outputs.append(raw_output)
             if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
             outputs.append(raw_output)
         self.hidden = to_detach(new_hidden)
+        print("new_hidden", type(new_hidden[0]))
+        print("new_hidden", len(new_hidden[0]))
+        print("new_hidden", new_hidden[2][1].shape, new_hidden[2][1].shape)
+        print("raw_outputs, outputs", np.allclose(raw_outputs[2],outputs[2]))
         return raw_outputs, outputs
 
     def _one_hidden(self, l:int)->Tensor:
@@ -129,6 +135,70 @@ class RNNCore(nn.Module):
         self.weights = next(self.parameters()).data
         if self.qrnn: self.hidden = [self._one_hidden(l) for l in range(self.n_layers)]
         else: self.hidden = [(self._one_hidden(l), self._one_hidden(l)) for l in range(self.n_layers)]
+
+class RNNEncoderCore(nn.Module):
+    "AWD-LSTM/QRNN inspired by https://arxiv.org/abs/1708.02182."
+
+    initrange=0.1
+
+    def __init__(self, vocab_sz:int, emb_sz:int, n_hid:int, n_layers:int, pad_token:int, bidir:bool=False,
+                 hidden_p:float=0.2, input_p:float=0.6, embed_p:float=0.1, weight_p:float=0.5, qrnn:bool=False):
+
+        super().__init__()
+        self.bs,self.qrnn,self.ndir = 1, qrnn,(2 if bidir else 1)
+        self.emb_sz,self.n_hid,self.n_layers = emb_sz,n_hid,n_layers
+        self.encoder = nn.Embedding(vocab_sz, emb_sz, padding_idx=pad_token)
+        self.encoder_dp = EmbeddingDropout(self.encoder, embed_p)
+        if self.qrnn:
+            #Using QRNN requires cupy: https://github.com/cupy/cupy
+            from .qrnn.qrnn import QRNNLayer
+            self.rnns = [QRNNLayer(emb_sz if l == 0 else n_hid, (n_hid if l != n_layers - 1 else emb_sz)//self.ndir,
+                                   save_prev_x=True, zoneout=0, window=2 if l == 0 else 1, output_gate=True,
+                                   use_cuda=torch.cuda.is_available()) for l in range(n_layers)]
+            for rnn in self.rnns: rnn.linear = WeightDropout(rnn.linear, weight_p, layer_names=['weight'])
+        else:
+            self.rnns = [nn.LSTM(emb_sz if l == 0 else n_hid, (n_hid if l != n_layers - 1 else emb_sz)//self.ndir,
+                1, bidirectional=bidir) for l in range(n_layers)]
+            self.rnns = [WeightDropout(rnn, weight_p) for rnn in self.rnns]
+        self.rnns = torch.nn.ModuleList(self.rnns)
+        self.encoder.weight.data.uniform_(-self.initrange, self.initrange)
+        self.input_dp = RNNDropout(input_p)
+        self.hidden_dps = nn.ModuleList([RNNDropout(hidden_p) for l in range(n_layers)])
+
+    def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]:
+        sl,bs = input.size()
+        if bs!=self.bs:
+            self.bs=bs
+            self.reset() #TODO check if this should be here?
+        raw_output = self.input_dp(self.encoder_dp(input))
+        new_hidden,raw_outputs,outputs = [],[],[]
+        for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
+            print("l and type(rnn) and type(hid_dp)", l, type(rnn), type(hid_dp))
+            raw_output, new_h = rnn(raw_output, self.hidden[l]) # get hidden
+            print("raw, new", raw_output.shape, new_h[0].shape)
+            new_hidden.append(new_h)
+            raw_outputs.append(raw_output)
+            if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
+            outputs.append(raw_output)
+        self.hidden = to_detach(new_hidden)
+        print("new_hidden", type(new_hidden[0]))
+        print("new_hidden", len(new_hidden[0]))
+        print("new_hidden", new_hidden[2][1].shape, new_hidden[2][1].shape)
+        print("raw_outputs, outputs", np.allclose(raw_outputs[2],outputs[2]))
+        return raw_outputs, outputs
+
+    def _one_hidden(self, l:int)->Tensor:
+        "Return one hidden state."
+        nh = (self.n_hid if l != self.n_layers - 1 else self.emb_sz)//self.ndir
+        return self.weights.new(self.ndir, self.bs, nh).zero_()
+
+    def reset(self):
+        "Reset the hidden states."
+        [r.reset() for r in self.rnns if hasattr(r, 'reset')]
+        self.weights = next(self.parameters()).data
+        if self.qrnn: self.hidden = [self._one_hidden(l) for l in range(self.n_layers)]
+        else: self.hidden = [(self._one_hidden(l), self._one_hidden(l)) for l in range(self.n_layers)]
+
 
 class LinearDecoder(nn.Module):
     "To go on top of a RNNCore module and create a Language Model."
@@ -166,16 +236,52 @@ class MultiBatchRNNCore(RNNCore):
         "Concatenate the `arrs` along the batch dimension."
         return [torch.cat([l[si] for l in arrs]) for si in range_of(arrs[0])]
 
-    def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]:
+    def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]: #HACK
         sl,bs = input.size()
+        print("sl, bs, self.bptt, self.max_seq", sl, bs, self.bptt, self.max_seq)
         self.reset()
+        print(input.shape)
         raw_outputs, outputs = [],[]
         for i in range(0, sl, self.bptt):
+            print("i:i+bptt", i, i+self.bptt)
+            print("input", input[i: min(i+self.bptt, sl)].shape)
             r, o = super().forward(input[i: min(i+self.bptt, sl)])
-            if i>(sl-self.max_seq):
+            if i>(sl-self.max_seq): # a maximum of max_len time-steps are saved
+                # print("save")
+                # print("r.shape, o.shape", o[0].shape, o[1].shape, o[2].shape)
                 raw_outputs.append(r)
                 outputs.append(o)
         return self.concat(raw_outputs), self.concat(outputs)
+
+
+class MultiBatchRNNEncoderCore(RNNEncoderCore):
+    "Create a RNNCore module that can process a full sentence."
+
+    def __init__(self, bptt:int, max_seq:int, *args, **kwargs):
+        self.max_seq,self.bptt = max_seq,bptt
+        super().__init__(*args, **kwargs)
+
+    def concat(self, arrs:Collection[Tensor])->Tensor:
+        "Concatenate the `arrs` along the batch dimension."
+        return [torch.cat([l[si] for l in arrs]) for si in range_of(arrs[0])]
+
+    def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]: #HACK
+        sl,bs = input.size()
+        print("sl, bs, self.bptt, self.max_seq", sl, bs, self.bptt, self.max_seq)
+        self.reset()
+        print(input.shape)
+        raw_outputs, outputs = [],[]
+        for i in range(0, sl, self.bptt):
+            print("i:i+bptt", i, i+self.bptt)
+            print("input", input[i: min(i+self.bptt, sl)].shape)
+            r, o = super().forward(input[i: min(i+self.bptt, sl)])
+            if i>(sl-self.max_seq): # a maximum of max_len time-steps are saved
+                # print("save")
+                # print("r.shape, o.shape", o[0].shape, o[1].shape, o[2].shape)
+                raw_outputs.append(r)
+                outputs.append(o)
+        return self.concat(raw_outputs), self.concat(outputs)
+
 
 class PoolingLinearClassifier(nn.Module):
     "Create a linear classifier with pooling."
@@ -219,3 +325,12 @@ def get_rnn_classifier(bptt:int, max_seq:int, n_class:int, vocab_sz:int, emb_sz:
     rnn_enc = MultiBatchRNNCore(bptt, max_seq, vocab_sz, emb_sz, n_hid, n_layers, pad_token=pad_token, bidir=bidir,
                       qrnn=qrnn, hidden_p=hidden_p, input_p=input_p, embed_p=embed_p, weight_p=weight_p)
     return SequentialRNN(rnn_enc, PoolingLinearClassifier(layers, drops))
+
+
+def get_rnn_encoder(bptt:int, max_seq:int, n_class:int, vocab_sz:int, emb_sz:int, n_hid:int, n_layers:int,
+                       pad_token:int, layers:Collection[int], drops:Collection[float], bidir:bool=False, qrnn:bool=False,
+                       hidden_p:float=0.2, input_p:float=0.6, embed_p:float=0.1, weight_p:float=0.5)->nn.Module:
+    "Create a RNN classifier model."
+    rnn_enc = MultiBatchRNNEncoderCore(bptt, max_seq, vocab_sz, emb_sz, n_hid, n_layers, pad_token=pad_token, bidir=bidir,
+                      qrnn=qrnn, hidden_p=hidden_p, input_p=input_p, embed_p=embed_p, weight_p=weight_p)
+    return SequentialRNN(rnn_enc, PoolingLinearClassifier(layers, drops)) # TODO get rid of this

@@ -15,7 +15,7 @@ def loss_batch(model:nn.Module, xb:Tensor, yb:Tensor, loss_func:OptLossFunc=None
     cb_handler = ifnone(cb_handler, CallbackHandler())
     if not is_listy(xb): xb = [xb]
     if not is_listy(yb): yb = [yb]
-    out = model(*xb)
+    out = model(*xb) # xb is a single element list
     out = cb_handler.on_loss_begin(out)
 
     if not loss_func: return to_detach(out), yb[0].detach()
@@ -160,6 +160,45 @@ class Learner():
         callbacks = [cb(self) for cb in self.callback_fns] + listify(callbacks)
         fit(epochs, self.model, self.loss_func, opt=self.opt, data=self.data, metrics=self.metrics,
             callbacks=self.callbacks+callbacks)
+
+    def lm_encode_sentences(self):
+        """extract features from the language model""" #TODO
+
+        self.model.eval() # turnn off the training regularization
+        encoder = self.model#[0]
+        #list to accumulate features
+        lm_features = []
+        # fold indices
+        end1 = 10
+        end2 = 20
+        index = 0
+        #
+        # batchx, batchy = next(iter(self.data.valid_dl))
+        # return encoder(batchx)
+        for xb, yb in self.data.valid_dl:
+            print("dir", dir(self.model))
+            print("valid batch shape", xb.shape)
+            out = encoder(xb)
+            last_state = out[0][2]
+            lm_features.append(last_state.detach().numpy())
+            index += 1
+            if index == end1:
+              np.save("test1", lm_features)
+              lm_features = []
+            if index == end2:
+              np.save("test2", lm_features)
+              lm_features = []
+
+        # lm_features = []
+        # for xb, yb in self.data.train_dl:
+        #
+        #     print("train batch shape", xb.shape)
+        #     encoder = self.model[0]
+        #     out = encoder(xb)
+        #     last_state = out[0][2]
+        #     lm_features.append(last_state.detach().numpy())
+
+        # np.save("train_test", lm_features)
 
     def create_opt(self, lr:Floats, wd:Floats=0.)->None:
         "Create optimizer with `lr` learning rate and `wd` weight decay."
