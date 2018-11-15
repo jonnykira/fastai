@@ -176,14 +176,16 @@ class Learner():
             c_states.append(c)
             labels.append(yb)
 
-        print("time to process train set:", time.time() - start)
-
         c_states = torch.squeeze(torch.cat(c_states, dim=1)).numpy()
+        labels = torch.cat(labels).numpy()
+        idxs = self.data.idxs[0]
+        # rearrange the sequences to their original order
+        c_states = np.asarray([x for _, x in sorted(zip(idxs, c_states), key=lambda pair: pair[0])])
+        labels = np.asarray([x for _, x in sorted(zip(idxs, labels), key=lambda pair: pair[0])])
+
         np.save("trxt.npy", c_states) # save the (num_sentences, hidden_size) array
-        labels = torch.cat(labels)
-        np.save("try.npy", labels.numpy())
-        np.save("trixs.npy", self.data.idxs[0]) # list of interers, the indices
-        print("train shapes: c_states, labels, idxs {}".format(c_states.shape), labels.numpy().shape, len(self.data.idxs[0]))
+        np.save("try.npy", labels)
+        print("time to process training set:", time.time() - start)
 
         c_states = []
         labels = []
@@ -193,13 +195,16 @@ class Learner():
             c_states.append(c)
             labels.append(yb)
 
-        print("time to process validation set:", time.time() - start)
-
         c_states = torch.squeeze(torch.cat(c_states, dim=1)).numpy()
+        labels = torch.cat(labels).numpy()
+        idxs = self.data.idxs[1]
+        # rearrange the sequences to their original order
+        c_states = np.asarray([x for _, x in sorted(zip(idxs, c_states), key=lambda pair: pair[0])])
+        labels = np.asarray([x for _, x in sorted(zip(idxs, labels), key=lambda pair: pair[0])])
+
         np.save("vxt.npy", c_states) # save the (num_sentences, hidden_size) array
-        labels = torch.cat(labels)
-        np.save("vy.npy", labels.numpy())
-        np.save("vixs.npy", self.data.idxs[1]) # list of interers, the indices
+        np.save("vy.npy", labels)
+        print("time to process validation set:", time.time() - start)
 
     def create_opt(self, lr:Floats, wd:Floats=0.)->None:
         "Create optimizer with `lr` learning rate and `wd` weight decay."
