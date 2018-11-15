@@ -92,7 +92,7 @@ class DataBunch():
     "Bind `train_dl`,`valid_dl` and`test_dl` to `device`. tfms are DL tfms (normalize). `path` is for models."
     def __init__(self, train_dl:DataLoader, valid_dl:DataLoader, test_dl:Optional[DataLoader]=None,
                  device:torch.device=None, tfms:Optional[Collection[Callable]]=None, path:PathOrStr='.',
-                 collate_fn:Callable=data_collate):
+                 collate_fn:Callable=data_collate, idxs=None):
         "Bind `train_dl`,`valid_dl` and`test_dl` to `device`. tfms are DL tfms (normalize). `path` is for models."
         self.tfms = listify(tfms)
         self.device = defaults.device if device is None else device
@@ -101,7 +101,7 @@ class DataBunch():
         self.valid_dl = DeviceDataLoader(valid_dl, self.device, self.tfms, collate_fn)
         self.test_dl  = DeviceDataLoader(test_dl,  self.device, self.tfms, collate_fn) if test_dl else None
         self.path = Path(path)
-
+        self.idxs = idxs
     @classmethod
     def create(cls, train_ds:Dataset, valid_ds:Dataset, test_ds:Dataset=None, path:PathOrStr='.', bs:int=64,
                num_workers:int=defaults.cpus, tfms:Optional[Collection[Callable]]=None, device:torch.device=None,
