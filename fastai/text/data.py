@@ -236,11 +236,14 @@ class LanguageModelLoader():
 class SortSampler(Sampler):
     "Go through the text data by order of length."
 
-    def __init__(self, data_source:NPArrayList, key:KeyFunc): self.data_source,self.key = data_source,key
+    def __init__(self, data_source:NPArrayList, key:KeyFunc):
+        self.data_source,self.key = data_source,key
     def __len__(self) -> int: return len(self.data_source)
     def __iter__(self):
         return iter(sorted(range_of(self.data_source), key=self.key, reverse=True))
-
+    def get_idxs(self):
+        idxs = sorted(range_of(self.data_source), key=self.key, reverse=True)
+        return idxs
 
 class SortishSampler(Sampler):
     "Go through the text data by order of length with a bit of randomness."
@@ -370,11 +373,15 @@ class TextLMEncoderDataBunch(TextDataBunch):
     def create(cls, datasets:Collection[TextDataset], path:PathOrStr, bs=None, pad_idx=1, pad_first=True, **kwargs) -> DataBunch:
         "Create a `TextDataBunch` in `path` from the `datasets` for language modelling."
         collate_fn = partial(pad_collate, pad_idx=pad_idx, pad_first=pad_first)
-        dataloaders = []
-        for ds in datasets:
-            sampler = SortSampler(ds.ids, key=lambda x: len(ds.ids[x]))
-            dataloaders.append(DataLoader(ds, batch_size=bs,  sampler=sampler, **kwargs))
-        return cls(*dataloaders, path=path, collate_fn=collate_fn)
+        ds_idxs = []
+        train_sampler = SortSampler(datasets[0].ids, key=lambda x: len(datasets[0].ids[x]))
+        train_dl = DataLoader(datasets[0], batch_size=bs,  sampler=train_sampler, **kwargs)
+        ds_idxs.append(train_sampler.get_idxs())
+        val_sampler = SortSampler(datasets[1].ids, key=lambda x: len(datasets[1].ids[x]))
+        val_dl = DataLoader(datasets[1], batch_size=bs,  sampler=val_sampler, **kwargs)
+        ds_idxs.append(val_sampler.get_idxs())
+        dataloaders = [train_dl, val_dl]
+        return cls(*dataloaders, path=path, collate_fn=collate_fn, idxs=ds_idxs)
 
 class TextClasDataBunch(TextDataBunch):
     "Create a `TextDataBunch` suitable for training an RNN classifier."
