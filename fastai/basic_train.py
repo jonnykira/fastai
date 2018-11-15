@@ -2,6 +2,7 @@
 from .torch_core import *
 from .basic_data import *
 from .callback import *
+import time
 
 __all__ = ['Learner', 'LearnerCallback', 'Recorder', 'fit', 'loss_batch', 'train_epoch', 'validate',
            'get_preds', 'default_lr', 'default_wd']
@@ -162,44 +163,43 @@ class Learner():
             callbacks=self.callbacks+callbacks)
 
     def lm_encode_sentences(self):
-        """extract features from the language model""" #TODO
+        """extract features from the language model"""
 
-        self.model.eval() # turnn off the training regularization
+        self.model.eval() # turn off the training regularization
         encoder = self.model[0]
-        #list to accumulate features
-        lm_features = []
-        # fold indices
-        end1 = 10
-        end2 = 20
-        index = 0
-        #
-        batchx, batchy = next(iter(self.data.valid_dl))
-        return encoder(batchx)
-        # for xb, yb in self.data.valid_dl:
-        #     # print("dir", dir(self.model))
-        #     # print("valid batch shape", xb.shape)
-        #     out = encoder(xb)
-        #     # print("out")
-        #     last_state = out[0][2]
-        #     lm_features.append(last_state.detach().numpy())
-        #     index += 1
-        #     if index == end1:
-        #       np.save("test1", lm_features)
-        #       lm_features = []
-        #     if index == end2:
-        #       np.save("test2", lm_features)
-        #       lm_features = []
 
-        # lm_features = []
-        # for xb, yb in self.data.train_dl:
-        #
-        #     print("train batch shape", xb.shape)
-        #     encoder = self.model[0]
-        #     out = encoder(xb)
-        #     last_state = out[0][2]
-        #     lm_features.append(last_state.detach().numpy())
+        c_states = []
+        labels = []
+        start = time.time()
+        for xb, yb in self.data.train_dl:
+            c = encoder(xb)
+            c_states.append(c)
+            labels.append(yb)
 
-        # np.save("train_test", lm_features)
+        print("time to process train set:", time.time() - start)
+
+        c_states = torch.squeeze(torch.cat(c_states, dim=1)).numpy()
+        np.save("trxt.npy", c_states) # save the (num_sentences, hidden_size) array
+        labels = torch.cat(labels)
+        np.save("try.npy", labels.numpy())
+        np.save("trixs.npy", self.data.idxs[0]) # list of interers, the indices
+        print("train shapes: c_states, labels, idxs {}".format(c_states.shape), labels.numpy().shape, len(self.data.idxs[0]))
+
+        c_states = []
+        labels = []
+        start = time.time()
+        for xb, yb in self.data.valid_dl:
+            c = encoder(xb)
+            c_states.append(c)
+            labels.append(yb)
+
+        print("time to process validation set:", time.time() - start)
+
+        c_states = torch.squeeze(torch.cat(c_states, dim=1)).numpy()
+        np.save("vxt.npy", c_states) # save the (num_sentences, hidden_size) array
+        labels = torch.cat(labels)
+        np.save("vy.npy", labels.numpy())
+        np.save("vixs.npy", self.data.idxs[1]) # list of interers, the indices
 
     def create_opt(self, lr:Floats, wd:Floats=0.)->None:
         "Create optimizer with `lr` learning rate and `wd` weight decay."
