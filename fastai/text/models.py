@@ -169,18 +169,16 @@ class RNNEncoderCore(nn.Module):
         sl,bs = input.size()
         if bs!=self.bs:
             self.bs=bs
-            self.reset() #TODO check what the reset does here
+            self.reset() # TODO check what the reset does here
         raw_output = self.input_dp(self.encoder_dp(input))
         new_hidden,raw_outputs,outputs = [],[],[]
         for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
-            print("rnn", rnn, l)
             raw_output, new_h = rnn(raw_output, self.hidden[l]) # get hidden
             new_hidden.append(new_h)
             raw_outputs.append(raw_output)
             if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
             outputs.append(raw_output)
         self.hidden = to_detach(new_hidden)
-        print("new_h[1]", new_h[1].shape)
         return new_h[1] # only return the final c state of the last layer
 
     def _one_hidden(self, l:int)->Tensor:
@@ -264,12 +262,9 @@ class MultiBatchRNNEncoderCore(RNNEncoderCore):
     def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]: #HACK
         sl,bs = input.size()
         self.reset()
-        print(input.shape)
         raw_outputs, outputs = [],[]
         for i in range(0, sl, self.bptt):
             c = super().forward(input[i: min(i+self.bptt, sl)])
-
-        print("return", c)
         return c
 
 
