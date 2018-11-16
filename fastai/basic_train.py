@@ -162,8 +162,11 @@ class Learner():
         fit(epochs, self.model, self.loss_func, opt=self.opt, data=self.data, metrics=self.metrics,
             callbacks=self.callbacks+callbacks)
 
-    def lm_encode_sentences(self):
-        """extract features from the language model"""
+    def lm_encode_sentences(self, output:str = None):
+        """extract features from the language model, currently uses only the final c state as the feature for each sequence"""
+
+        if not os.path.exists(output):
+            os.makedirs(output)
 
         self.model.eval() # turn off the training regularization
         encoder = self.model[0]
@@ -183,8 +186,8 @@ class Learner():
         c_states = np.asarray([x for _, x in sorted(zip(idxs, c_states), key=lambda pair: pair[0])])
         labels = np.asarray([x for _, x in sorted(zip(idxs, labels), key=lambda pair: pair[0])])
 
-        np.save("trxt.npy", c_states) # save the (num_sentences, hidden_size) array
-        np.save("try.npy", labels)
+        np.save(Path(output, "trxt.npy"), c_states) # save the (num_sentences, hidden_size) array
+        np.save(Path(output, "try.npy"), labels)
         print("time to process training set:", time.time() - start)
 
         c_states = []
@@ -202,8 +205,8 @@ class Learner():
         c_states = np.asarray([x for _, x in sorted(zip(idxs, c_states), key=lambda pair: pair[0])])
         labels = np.asarray([x for _, x in sorted(zip(idxs, labels), key=lambda pair: pair[0])])
 
-        np.save("vxt.npy", c_states) # save the (num_sentences, hidden_size) array
-        np.save("vy.npy", labels)
+        np.save(Path(output, "vxt.npy"), c_states) # save the (num_sentences, hidden_size) array
+        np.save(Path(output, "vy.npy"), labels)
         print("time to process validation set:", time.time() - start)
 
     def create_opt(self, lr:Floats, wd:Floats=0.)->None:
