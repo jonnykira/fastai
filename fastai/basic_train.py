@@ -336,41 +336,60 @@ class Recorder(LearnerCallback):
     def add_metric_names(self, names):
         self._added_met_names = names
 
-    def plot_lr(self, show_moms=False)->None:
+    def plot_lr(self, show_moms=True, save_path:str='lr.png')->None:
         "Plot learning rate, `show_moms` to include momentum."
         iterations = range_of(self.lrs)
         if show_moms:
-            _, axs = plt.subplots(1,2, figsize=(12,4))
+            fig, axs = plt.subplots(1,2, figsize=(12,4))
             axs[0].plot(iterations, self.lrs)
-            axs[1].plot(iterations, self.moms)
-        else: plt.plot(iterations, self.lrs)
+            axs[0].set_title('lr plot')
+            axs[0].set_xlabel("Iterations")
+            axs[0].set_ylabel("Learning rate")
 
-    def plot(self, skip_start:int=10, skip_end:int=5)->None:
+            axs[1].plot(iterations, self.moms)
+            axs[1].set_title('momentum plot')
+            fig.savefig(save_path)
+        else:
+            fig, ax = plt.subplots(1,1)
+            ax.plot(iterations, self.lrs)
+            ax.set_xlabel("Iterations")
+            ax.set_ylabel("Learning rate")
+            ax.set_title('lr plot')
+            fig.savefig(save_path)
+
+    def plot(self, skip_start:int=10, skip_end:int=5, save_path:str="lr_vs_loss.png")->None:
         "Plot learning rate and losses, trimmed between `skip_start` and `skip_end`."
         lrs = self.lrs[skip_start:-skip_end] if skip_end > 0 else self.lrs[skip_start:]
         losses = self.losses[skip_start:-skip_end] if skip_end > 0 else self.losses[skip_start:]
-        _, ax = plt.subplots(1,1)
+        fig, ax = plt.subplots(1,1)
         ax.plot(lrs, losses)
         ax.set_ylabel("Loss")
         ax.set_xlabel("Learning Rate")
         ax.set_xscale('log')
+        ax.set_title("lr vs loss")
+        fig.savefig(save_path)
 
-    def plot_losses(self)->None:
+    def plot_losses(self, save_path:str="loss.png")->None:
         "Plot training and validation losses."
-        _, ax = plt.subplots(1,1)
+        fig, ax = plt.subplots(1,1)
         iterations = range_of(self.losses)
         ax.plot(iterations, self.losses)
         val_iter = self.nb_batches
         val_iter = np.cumsum(val_iter)
         ax.plot(val_iter, self.val_losses)
+        ax.set_title("loss plot")
+        ax.set_ylabel("Loss")
+        ax.set_xlabel("Iterations")
+        fig.savefig(save_path)
 
     def plot_metrics(self)->None:
         "Plot metrics collected during training."
         assert len(self.metrics) != 0, "There are no metrics to plot."
-        _, axes = plt.subplots(len(self.metrics[0]),1,figsize=(6, 4*len(self.metrics[0])))
+        fig, axes = plt.subplots(len(self.metrics[0]),1,figsize=(6, 4*len(self.metrics[0])))
         val_iter = self.nb_batches
         val_iter = np.cumsum(val_iter)
         axes = axes.flatten() if len(self.metrics[0]) != 1 else [axes]
         for i, ax in enumerate(axes):
             values = [met[i] for met in self.metrics]
             ax.plot(val_iter, values)
+        fig.savefig("metric_plot_test")
