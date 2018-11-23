@@ -110,18 +110,12 @@ class RNNCore(nn.Module):
         raw_output = self.input_dp(self.encoder_dp(input))
         new_hidden,raw_outputs,outputs = [],[],[]
         for l, (rnn,hid_dp) in enumerate(zip(self.rnns, self.hidden_dps)):
-            print("l and type(rnn) and type(hid_dp)", l, type(rnn), type(hid_dp))
             raw_output, new_h = rnn(raw_output, self.hidden[l]) # get hidden
-            print("raw, new", raw_output.shape, new_h[0].shape)
             new_hidden.append(new_h)
             raw_outputs.append(raw_output)
             if l != self.n_layers - 1: raw_output = hid_dp(raw_output)
             outputs.append(raw_output)
         self.hidden = to_detach(new_hidden)
-        print("new_hidden", type(new_hidden[0]))
-        print("new_hidden", len(new_hidden[0]))
-        print("new_hidden", new_hidden[2][1].shape, new_hidden[2][1].shape)
-        print("raw_outputs, outputs", np.allclose(raw_outputs[2],outputs[2]))
         return raw_outputs, outputs
 
     def _one_hidden(self, l:int)->Tensor:
@@ -232,17 +226,11 @@ class MultiBatchRNNCore(RNNCore):
 
     def forward(self, input:LongTensor)->Tuple[Tensor,Tensor]: #HACK
         sl,bs = input.size()
-        print("sl, bs, self.bptt, self.max_seq", sl, bs, self.bptt, self.max_seq)
         self.reset()
-        print(input.shape)
         raw_outputs, outputs = [],[]
         for i in range(0, sl, self.bptt):
-            print("i:i+bptt", i, i+self.bptt)
-            print("input", input[i: min(i+self.bptt, sl)].shape)
             r, o = super().forward(input[i: min(i+self.bptt, sl)])
             if i>(sl-self.max_seq): # a maximum of max_len time-steps are saved
-                # print("save")
-                # print("r.shape, o.shape", o[0].shape, o[1].shape, o[2].shape)
                 raw_outputs.append(r)
                 outputs.append(o)
         return self.concat(raw_outputs), self.concat(outputs)
