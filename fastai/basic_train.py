@@ -165,7 +165,6 @@ class Learner():
     def lm_encode_sentences(self, output:str = None):
         """extract features from the language model, currently uses only the final c state as the feature for each sequence"""
         
-        print("encoding sentences")
         if not os.path.exists(output):
             os.makedirs(output)
 
@@ -176,14 +175,10 @@ class Learner():
         labels = []
         start = time.time()
         for xb, yb in self.data.train_dl:
-            #print("xb shape: {}".format(xb.shape))
             c = encoder(xb)
             c_states.append(c.cpu().detach().numpy())
-            #print(c.shape)
             labels.append(yb.cpu().detach().numpy())
 
-        #c_states = torch.squeeze(torch.cat(c_states, dim=1)).numpy()
-        #labels = torch.cat(labels).numpy()
         c_states = np.squeeze(np.concatenate(c_states, axis=1))
         labels = np.concatenate(labels)
         idxs = self.data.idxs[0]
@@ -342,7 +337,7 @@ class Recorder(LearnerCallback):
     def add_metric_names(self, names):
         self._added_met_names = names
 
-    def plot_lr(self, show_moms=False, save_path:str='lr.png')->None:
+    def plot_lr(self, show_moms=False, save_path:str='lr')->None:
         "Plot learning rate, `show_moms` to include momentum."
         iterations = range_of(self.lrs)
         if show_moms:
@@ -354,16 +349,24 @@ class Recorder(LearnerCallback):
      
             axs[1].plot(iterations, self.moms)
             axs[1].set_title("momentum plot")
-            fig.savefig(save_path)
+            #fig.savefig(save_path)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            np.save(os.path.join(save_path, "lrs"), self.lrs)
+            np.save(os.path.join(save_path, "moms"), self.moms)
         else:
             fig, ax = plt.subplots(1,1)
             ax.plot(iterations, self.lrs)
             ax.set_xlabel("Iterations")
             ax.set_ylabel("Learning rate")           
             ax.set_title("lr plot")
-            fig.savefig(save_path)
+            #fig.savefig(save_path)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            np.save(os.path.join(save_path, "lrs"), self.lrs)
+            np.save(os.path.join(save_path, "moms"), self.moms)
 
-    def plot(self, skip_start:int=10, skip_end:int=5, save_path:str="lr_vs_loss.png")->None:
+    def plot(self, skip_start:int=10, skip_end:int=5, save_path:str="lr_vs_loss")->None:
         "Plot learning rate and losses, trimmed between `skip_start` and `skip_end`."
         lrs = self.lrs[skip_start:-skip_end] if skip_end > 0 else self.lrs[skip_start:]
         losses = self.losses[skip_start:-skip_end] if skip_end > 0 else self.losses[skip_start:]
@@ -373,22 +376,30 @@ class Recorder(LearnerCallback):
         ax.set_xlabel("Learning Rate")
         ax.set_xscale('log')
         ax.set_title("lr vs loss")
-        fig.savefig(save_path)
+        #fig.savefig(save_path)
+        if not os.path.exists(save_path):
+             os.makedirs(save_path)
+        np.save(os.path.join(save_path, "lrs"), lrs)
+        np.save(os.path.join(save_path, "losses"), losses)
 
-    def plot_losses(self, save_path:str="loss.png")->None:
+    def plot_losses(self, save_path:str="losses")->None:
         "Plot training and validation losses."
         fig, ax = plt.subplots(1,1)
         iterations = range_of(self.losses)
         ax.plot(iterations, self.losses)
         val_iter = self.nb_batches
         val_iter = np.cumsum(val_iter)
-        ax.plot(val_iter, self.val_losses)
+        #ax.plot(val_iter, self.val_losses)
         ax.set_title("loss_plot")
         ax.set_ylabel("Loss")
         ax.set_xlabel("Iterations")
-        fig.savefig(save_path)
+        #fig.savefig(save_path)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        np.save(os.path.join(save_path, "losses"), self.val_losses)
+        np.save(os.path.join(save_path, "losses"), val_iter)
 
-    def plot_metrics(self, save_path:str="metric_plot.png")->None:
+    def plot_metrics(self, save_path:str="metrics")->None:
         "Plot metrics collected during training."
         assert len(self.metrics) != 0, "There are no metrics to plot."
         fig, axes = plt.subplots(len(self.metrics[0]),1,figsize=(6, 4*len(self.metrics[0])))
@@ -398,4 +409,7 @@ class Recorder(LearnerCallback):
         for i, ax in enumerate(axes):
             values = [met[i] for met in self.metrics]
             ax.plot(val_iter, values)
-            fig.savefig(save_path)
+            #fig.savefig(save_path)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        np.save(os.path.join(save_path, "metrics"), metrics)
