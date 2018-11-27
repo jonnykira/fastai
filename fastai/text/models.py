@@ -302,8 +302,10 @@ def get_rnn_classifier(bptt:int, max_seq:int, n_class:int, vocab_sz:int, emb_sz:
 
 def get_rnn_encoder(bptt:int, max_seq:int, n_class:int, vocab_sz:int, emb_sz:int, n_hid:int, n_layers:int,
                        pad_token:int, layers:Collection[int], drops:Collection[float], bidir:bool=False, qrnn:bool=False,
-                       hidden_p:float=0.2, input_p:float=0.6, embed_p:float=0.1, weight_p:float=0.5)->nn.Module:
-    "Create a RNN classifier model."
+                       hidden_p:float=0.2, input_p:float=0.6, embed_p:float=0.1, weight_p:float=0.5, output_p:float=0.4, tie_weights:bool=True, bias:bool=True)->nn.Module:
+    "Create a RNN encoder model."
     rnn_enc = MultiBatchRNNEncoderCore(bptt, max_seq, vocab_sz, emb_sz, n_hid, n_layers, pad_token=pad_token, bidir=bidir,
                       qrnn=qrnn, hidden_p=hidden_p, input_p=input_p, embed_p=embed_p, weight_p=weight_p)
-    return SequentialRNN(rnn_enc, PoolingLinearClassifier(layers, drops))
+    enc = rnn_enc.encoder if tie_weights else None
+    return SequentialRNN(rnn_enc, LinearDecoder(vocab_sz, emb_sz, output_p, tie_encoder=enc, bias=bias))
+
