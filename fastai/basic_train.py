@@ -385,9 +385,9 @@ class Recorder(LearnerCallback):
 
     def plot_losses(self, save_path:str="losses")->None:
         "Plot training and validation losses."
-        fig, ax = plt.subplots(1,1)
+        #fig, ax = plt.subplots(1,1)
         iterations = range_of(self.losses)
-        ax.plot(iterations, self.losses)
+        # ax.plot(iterations, self.losses)
         val_iter = self.nb_batches
         val_iter = np.cumsum(val_iter)
         #ax.plot(val_iter, self.val_losses)
