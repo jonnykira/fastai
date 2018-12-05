@@ -379,9 +379,10 @@ class Recorder(LearnerCallback):
         # ax.set_title("lr vs loss")
         #fig.savefig(save_path)
         if not os.path.exists(save_path):
-             os.makedirs(save_path)
+            os.makedirs(save_path)
         # np.save(os.path.join(save_path, "lrs"), lrs) # already saved in plot_lr()
-        np.save(os.path.join(save_path, "losses"), losses)
+        np.save(os.path.join(save_path, "lrs_trim"), lrs)
+        np.save(os.path.join(save_path, "losses_trim"), losses)
 
     def plot_losses(self, save_path:str="losses")->None:
         "Plot training and validation losses."
@@ -398,7 +399,7 @@ class Recorder(LearnerCallback):
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         np.save(os.path.join(save_path, "val_losses"), self.val_losses)
-        # np.save(os.path.join(save_path, "losses"), val_iter)
+        np.save(os.path.join(save_path, "losses"), self.losses)
 
     def plot_metrics(self, save_path:str="metrics")->None:
         "Plot metrics collected during training."
